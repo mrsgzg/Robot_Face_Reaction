@@ -6,8 +6,46 @@ from data_process import get_dataloader
 
 def main():
     parser = argparse.ArgumentParser(description="Train a multi-modal NN model for listener face feature generation.")
+
+    # Dataset and scaler paths
+    parser.add_argument("--mapping_csv", type=str, default='Robot_dataset/train.csv',
+                        help="Path to the training CSV mapping file.")
+    parser.add_argument("--val_mapping_csv", type=str, default='Robot_dataset/val.csv',
+                        help="Path to the validation CSV mapping file (optional).")
+    parser.add_argument("--scaler_path", type=str, default="Robot_Face_Reaction/data_process/Face_Scaler.pkl",
+                        help="Path to the face features scaler.")
+    parser.add_argument("--audio_scaler_path", type=str, default="Robot_Face_Reaction/data_process/Audio_Scaler.pkl",
+                        help="Path to the audio features scaler.")
     
-    # ... [other argument definitions] ...
+    # DataLoader parameters
+    parser.add_argument("--batch_size", type=int, default=2,
+                        help="Batch size for training.")
+    parser.add_argument("--sequence_length", type=int, default=100,
+                        help="Length of each sequence window.")
+    parser.add_argument("--stride", type=int, default=10,
+                        help="Stride for sequence creation.")
+    parser.add_argument("--num_workers", type=int, default=0,
+                        help="Number of workers for DataLoader.")
+    
+    # Training hyperparameters
+    parser.add_argument("--epochs", type=int, default=50,
+                        help="Number of training epochs.")
+    parser.add_argument("--lr", type=float, default=0.001,
+                        help="Learning rate for the optimizer.")
+    
+    # Checkpointing and logging
+    parser.add_argument("--checkpoint_dir", type=str, default="checkpoints/",
+                        help="Directory to save model checkpoints.")
+    parser.add_argument("--logs_dir", type=str, default="logs/",
+                        help="Directory to save training logs and history.")
+    parser.add_argument("--checkpoint_interval", type=int, default=5,
+                        help="Interval (in epochs) to save checkpoints.")
+    
+    # Model selection (model factory will load models from the models/ folder)
+    parser.add_argument("--model", type=str, default="gru_encoderdecoder",
+                        help="Model type to use (e.g., gru_encoderdecoder, attention, Transformer).")
+    
+    # Device configuration
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device to run training on.")
     

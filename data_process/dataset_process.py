@@ -11,7 +11,6 @@ import joblib
 
 class SpeakerListenerDataset(Dataset):
     def __init__(self, mapping_csv, stride=10, sequence_length=100, normalize=True, scaler_path="scaler.pkl", audio_scaler_path="audio_scaler.pkl"):
-        
         self.target_length = 750  # ✅ 统一长度为 750 帧
         self.mapping_df = pd.read_csv(mapping_csv, engine="c")  # ✅ 使用 C 解析器加速
         self.sequence_length = sequence_length
@@ -23,7 +22,6 @@ class SpeakerListenerDataset(Dataset):
         self.scaler = joblib.load(scaler_path)  
         # **加载音频 scaler**
         self.mfcc_scaler, self.mel_scaler = joblib.load(audio_scaler_path)  
-
 
     def _convert_path(self, path, ext):
         """自动适配 Windows 和 Ubuntu 路径，同时替换扩展名"""
@@ -60,7 +58,7 @@ class SpeakerListenerDataset(Dataset):
             df = df.loc[:self.target_length - 1]  # ✅ 限制为 750 帧
             df = self._interpolate_missing_frames(df)  # **✅ 插值补帧**
             df = df.drop(columns=["frame"])  # 删除 frame 列多余列
-            print("✅ 加载成功:", parquet_path)
+            #print("✅ 加载成功:", parquet_path)
             # **使用全局 scaler 归一化**    
             df = self.scaler.transform(df.to_numpy())  # ✅ 使用全局 scaler 归一化
 
@@ -174,7 +172,7 @@ def get_dataloader(mapping_csv, batch_size=2, stride=10, num_workers=0, sequence
     dataset = SpeakerListenerDataset(mapping_csv, stride, sequence_length, scaler_path=scaler_path, audio_scaler_path=audio_scaler_path)
     return DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
 
-
+'''
 if __name__ == '__main__':
     # ✅ 指定测试路径
     mapping_csv = "Robot_dataset/train.csv"
@@ -201,3 +199,4 @@ if __name__ == '__main__':
 
         # **只测试一个 batch**
         break
+'''

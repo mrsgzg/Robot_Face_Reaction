@@ -5,6 +5,23 @@ import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
+def sample_sequences(tensor, num_select=8):
+    """
+    Randomly sample 'num_select' sequences from each sample in the batch.
+    
+    Args:
+        tensor (Tensor): Shape [B, N, T, F]
+        num_select (int): Number of sequences to select per sample.
+    
+    Returns:
+        Tensor: Sampled tensor of shape [B, num_select, T, F]
+    """
+    B, N, T, F = tensor.size()
+    # For each sample in the batch, randomly pick num_select indices from [0, N)
+    indices = torch.randint(low=0, high=N, size=(B, num_select))
+    sampled = torch.stack([tensor[b, indices[b], :, :] for b in range(B)], dim=0)
+    return sampled
+
 def train_model(model, train_loader, val_loader, optimizer, device, epochs, checkpoint_dir, logs_dir, checkpoint_interval):
     """
     Train the given model.
@@ -47,9 +64,24 @@ def train_model(model, train_loader, val_loader, optimizer, device, epochs, chec
             listener_expr = listener_expr.to(device).float()
             speaker_mfcc = speaker_mfcc.to(device).float()
             
+            speaker_expr = sample_sequences(speaker_expr, num_select=1)
+            listener_expr = sample_sequences(listener_expr, num_select=1)
+            speaker_mfcc = sample_sequences(speaker_mfcc, num_select=1)
+
             # Prepare decoder inputs using teacher forcing:
             # For simplicity, we create a decoder input sequence by shifting the listener face features by one time step.
-            batch_size, seq_len, output_dim = listener_expr.size()
+            B, N, T, output_dim = listener_expr.size()
+            speaker_expr = speaker_expr.view(-1, T, speaker_expr.size(-1))      # shape: [B*N, T, speaker_dim]
+            listener_expr = listener_expr.view(-1, T, output_dim)                 # shape: [B*N, T, output_dim]
+            speaker_mfcc = speaker_mfcc.view(-1, T, speaker_mfcc.size(-1))         # shape: [B*N, T, audio_dim]
+            # Now, update batch_size to the new flattened size
+            new_batch_size = speaker_expr.size(0)
+            decoder_inputs = torch.zeros(new_batch_size, T, output_dim, device=device)
+            decoder_inputs[:, 1:, :] = listener_expr[:, :-1, :]
+
+            # Forward pass
+            outputs = model(speaker_expr, speaker_mfcc, decoder_inputs)
+
             decoder_inputs = torch.zeros(batch_size, seq_len, output_dim, device=device)
             decoder_inputs[:, 1:, :] = listener_expr[:, :-1, :]
             
