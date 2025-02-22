@@ -5,24 +5,9 @@ import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-def sample_sequences(tensor, num_select=8):
-    """
-    Randomly sample 'num_select' sequences from each sample in the batch.
-    
-    Args:
-        tensor (Tensor): Shape [B, N, T, F]
-        num_select (int): Number of sequences to select per sample.
-    
-    Returns:
-        Tensor: Sampled tensor of shape [B, num_select, T, F]
-    """
-    B, N, T, F = tensor.size()
-    # For each sample in the batch, randomly pick num_select indices from [0, N)
-    indices = torch.randint(low=0, high=N, size=(B, num_select))
-    sampled = torch.stack([tensor[b, indices[b], :, :] for b in range(B)], dim=0)
-    return sampled
 
-def train_model(model, train_loader, val_loader, optimizer, device, epochs, checkpoint_dir, logs_dir, checkpoint_interval):
+
+def train_model(model, train_loader, val_loader, optimizer, device, epochs, checkpoint_dir, logs_dir, checkpoint_interval,num_select):
     """
     Train the given model.
 
@@ -36,6 +21,8 @@ def train_model(model, train_loader, val_loader, optimizer, device, epochs, chec
         checkpoint_dir (str): Directory to save model checkpoints.
         logs_dir (str): Directory to save training logs.
         checkpoint_interval (int): Save a checkpoint every N epochs.
+        num_select (int): Number of sequences selected per video (used in flattening).
+
     """
     # Mean Squared Error loss for regression
     criterion = nn.MSELoss()
@@ -48,7 +35,7 @@ def train_model(model, train_loader, val_loader, optimizer, device, epochs, chec
         running_loss = 0.0
         num_batches = 0
         start_time = time.time()
-        
+        print(start_time)
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch}/{epochs}", unit="batch")
 
         for batch in progress_bar:
@@ -58,34 +45,24 @@ def train_model(model, train_loader, val_loader, optimizer, device, epochs, chec
             if batch is None:
                 continue
             speaker_expr, listener_expr, speaker_mfcc, _, _, _ = batch
-            
+            print("1")
+            B, N, T, F_expr = speaker_expr.shape
+            speaker_expr = speaker_expr.view(-1, T, F_expr)
+            listener_expr = listener_expr.view(-1, T, listener_expr.shape[-1])
+            speaker_mfcc = speaker_mfcc.view(-1, T, speaker_mfcc.shape[-1])
+            print("2")
+            # Prepare decoder inputs using teacher forcing: first time step is zeros.
+            batch_size, seq_len, out_dim = listener_expr.shape
+            decoder_inputs = torch.zeros(batch_size, seq_len, out_dim, device=device)
+            decoder_inputs[:, 1:, :] = listener_expr[:, :-1, :]
+            print("Here")
             # Move data to device
             speaker_expr = speaker_expr.to(device).float()
             listener_expr = listener_expr.to(device).float()
             speaker_mfcc = speaker_mfcc.to(device).float()
-            
-            speaker_expr = sample_sequences(speaker_expr, num_select=1)
-            listener_expr = sample_sequences(listener_expr, num_select=1)
-            speaker_mfcc = sample_sequences(speaker_mfcc, num_select=1)
 
-            # Prepare decoder inputs using teacher forcing:
-            # For simplicity, we create a decoder input sequence by shifting the listener face features by one time step.
-            B, N, T, output_dim = listener_expr.size()
-            speaker_expr = speaker_expr.view(-1, T, speaker_expr.size(-1))      # shape: [B*N, T, speaker_dim]
-            listener_expr = listener_expr.view(-1, T, output_dim)                 # shape: [B*N, T, output_dim]
-            speaker_mfcc = speaker_mfcc.view(-1, T, speaker_mfcc.size(-1))         # shape: [B*N, T, audio_dim]
-            # Now, update batch_size to the new flattened size
-            new_batch_size = speaker_expr.size(0)
-            decoder_inputs = torch.zeros(new_batch_size, T, output_dim, device=device)
-            decoder_inputs[:, 1:, :] = listener_expr[:, :-1, :]
-
-            # Forward pass
-            outputs = model(speaker_expr, speaker_mfcc, decoder_inputs)
-
-            decoder_inputs = torch.zeros(batch_size, seq_len, output_dim, device=device)
-            decoder_inputs[:, 1:, :] = listener_expr[:, :-1, :]
-            
             optimizer.zero_grad()
+            print("haofan")
             outputs = model(speaker_expr, speaker_mfcc, decoder_inputs)
             loss = criterion(outputs, listener_expr)
             loss.backward()
@@ -106,17 +83,24 @@ def train_model(model, train_loader, val_loader, optimizer, device, epochs, chec
             val_loss = 0.0
             val_batches = 0
             with torch.no_grad():
-                for batch in val_loader:
+                for batch in tqdm(val_loader, desc=f"Epoch {epoch}/{epochs} [Validation]", unit="batch"):
                     if batch is None:
                         continue
                     speaker_expr, listener_expr, speaker_mfcc, _, _, _ = batch
+                    if speaker_expr.ndim == 4:
+                        B, N, T, F_expr = speaker_expr.shape
+                        speaker_expr = speaker_expr.view(-1, T, F_expr)
+                        listener_expr = listener_expr.view(-1, T, listener_expr.shape[-1])
+                        speaker_mfcc = speaker_mfcc.view(-1, T, speaker_mfcc.shape[-1])
+                    
+                    batch_size, seq_len, out_dim = listener_expr.shape
+                    decoder_inputs = torch.zeros(batch_size, seq_len, out_dim, device=device)
+                    decoder_inputs[:, 1:, :] = listener_expr[:, :-1, :]
+                    
                     speaker_expr = speaker_expr.to(device).float()
                     listener_expr = listener_expr.to(device).float()
                     speaker_mfcc = speaker_mfcc.to(device).float()
-                    
-                    batch_size, seq_len, output_dim = listener_expr.size()
-                    decoder_inputs = torch.zeros(batch_size, seq_len, output_dim, device=device)
-                    decoder_inputs[:, 1:, :] = listener_expr[:, :-1, :]
+                    decoder_inputs = decoder_inputs.to(device).float()
                     
                     outputs = model(speaker_expr, speaker_mfcc, decoder_inputs)
                     loss = criterion(outputs, listener_expr)

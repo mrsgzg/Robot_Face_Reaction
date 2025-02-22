@@ -10,13 +10,13 @@ from sklearn.preprocessing import StandardScaler
 import joblib
 
 class SpeakerListenerDataset(Dataset):
-    def __init__(self, mapping_csv, stride=10, sequence_length=100, normalize=True, scaler_path="scaler.pkl", audio_scaler_path="audio_scaler.pkl"):
+    def __init__(self, mapping_csv, stride=10, sequence_length=100, normalize=True, scaler_path="scaler.pkl", audio_scaler_path="audio_scaler.pkl",num_select=1):
         self.target_length = 750  # ✅ 统一长度为 750 帧
         self.mapping_df = pd.read_csv(mapping_csv, engine="c")  # ✅ 使用 C 解析器加速
         self.sequence_length = sequence_length
         self.stride = stride
         self.normalize = normalize
-
+        self.num_select =num_select
         # **🔹 加载全局归一化参数**
 
         self.scaler = joblib.load(scaler_path)  
@@ -165,21 +165,34 @@ class SpeakerListenerDataset(Dataset):
         
         listener_sequences_expr, listener_sequences_mfcc, listener_sequences_mel = self._create_sequences(listener_df, listener_mfcc, listener_mel)
 
+        if self.num_select < speaker_sequences_expr.shape[0]:
+            indices = np.random.choice(speaker_sequences_expr.shape[0], self.num_select, replace=False)
+            speaker_sequences_expr = speaker_sequences_expr[indices]
+            speaker_sequences_mfcc = speaker_sequences_mfcc[indices]
+            speaker_sequences_mel = speaker_sequences_mel[indices]
+
+            listener_sequences_expr = listener_sequences_expr[indices]
+            listener_sequences_mfcc = listener_sequences_mfcc[indices]
+            listener_sequences_mel = listener_sequences_mel[indices]
+
+
         return speaker_sequences_expr, listener_sequences_expr, speaker_sequences_mfcc, listener_sequences_mfcc, speaker_sequences_mel, listener_sequences_mel
 
 
-def get_dataloader(mapping_csv, batch_size=2, stride=10, num_workers=0, sequence_length=100, scaler_path="scaler.pkl", audio_scaler_path="audio_scaler.pkl"):
-    dataset = SpeakerListenerDataset(mapping_csv, stride, sequence_length, scaler_path=scaler_path, audio_scaler_path=audio_scaler_path)
+def get_dataloader(mapping_csv, batch_size=2, stride=10, num_workers=0, sequence_length=100, scaler_path="scaler.pkl", audio_scaler_path="audio_scaler.pkl",num_select=1):
+    dataset = SpeakerListenerDataset(mapping_csv, stride, sequence_length, scaler_path=scaler_path, audio_scaler_path=audio_scaler_path,num_select=num_select)
     return DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
 
 '''
 if __name__ == '__main__':
     # ✅ 指定测试路径
     mapping_csv = "Robot_dataset/train.csv"
-    face_scaler_path = "Robot_face_gen/data_process/Face_Scaler.pkl"
-    audio_scaler_path = "Robot_face_gen/data_process/Audio_Scaler.pkl"
+    face_scaler_path = "Robot_Face_Reaction/data_process/Face_Scaler.pkl"
+    audio_scaler_path = "Robot_Face_Reaction/data_process/Audio_Scaler.pkl"
+    
     # ✅ 创建 DataLoader
-    dataloader = get_dataloader(mapping_csv, batch_size=2, stride=10, num_workers=0, sequence_length=100, scaler_path=face_scaler_path,audio_scaler_path = audio_scaler_path)
+    dataloader = get_dataloader(mapping_csv, batch_size=2, stride=10, num_workers=0, sequence_length=100, 
+                                scaler_path=face_scaler_path,audio_scaler_path = audio_scaler_path,num_select=4)
 
     # ✅ 取出一个 batch 并检查形状
     for i, (speaker_seq, listener_seq, speaker_mfcc, listener_mfcc, speaker_mel, listener_mel) in enumerate(dataloader):

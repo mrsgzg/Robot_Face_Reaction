@@ -16,9 +16,10 @@ def main():
                         help="Path to the face features scaler.")
     parser.add_argument("--audio_scaler_path", type=str, default="Robot_Face_Reaction/data_process/Audio_Scaler.pkl",
                         help="Path to the audio features scaler.")
-    
+    parser.add_argument("--num_select", type=int, default=1,
+                        help="Number of select sequences.")
     # DataLoader parameters
-    parser.add_argument("--batch_size", type=int, default=2,
+    parser.add_argument("--batch_size", type=int, default=1,
                         help="Batch size for training.")
     parser.add_argument("--sequence_length", type=int, default=100,
                         help="Length of each sequence window.")
@@ -51,7 +52,7 @@ def main():
     
     args = parser.parse_args()
     
-    print("Configuration:")
+    print("Configuration!!!!!!!!:")
     for arg, value in vars(args).items():
         print(f"{arg}: {value}")
     
@@ -65,9 +66,10 @@ def main():
         num_workers=args.num_workers,
         sequence_length=args.sequence_length,
         scaler_path=args.scaler_path,
-        audio_scaler_path=args.audio_scaler_path
+        audio_scaler_path=args.audio_scaler_path,
+        num_select=args.num_select
     )
-    
+    print("****")
     val_loader = None
     if args.val_mapping_csv is not None:
         val_loader = get_dataloader(
@@ -77,7 +79,8 @@ def main():
             num_workers=args.num_workers,
             sequence_length=args.sequence_length,
             scaler_path=args.scaler_path,
-            audio_scaler_path=args.audio_scaler_path
+            audio_scaler_path=args.audio_scaler_path,
+            num_select=args.num_select
         )
     
     from model import get_model
@@ -101,7 +104,8 @@ def main():
         epochs=args.epochs,
         checkpoint_dir=args.checkpoint_dir,
         logs_dir=args.logs_dir,
-        checkpoint_interval=args.checkpoint_interval
+        checkpoint_interval=args.checkpoint_interval,
+        num_select = args.num_select
     )
 
 if __name__ == '__main__':

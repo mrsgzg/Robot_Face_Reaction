@@ -47,7 +47,9 @@ class GRUEncoderDecoder(nn.Module):
         
         # Linear layer to map decoder hidden states to the output listener face feature dimension
         self.out_fc = nn.Linear(hidden_dim, output_dim)
-    
+
+        print("finish init model")
+
     def forward(self, speaker_expr, speaker_mfcc, decoder_inputs):
         """
         Forward pass of the GRU-EncoderDecoder model.
@@ -62,7 +64,7 @@ class GRUEncoderDecoder(nn.Module):
             Tensor: Generated listener face features, shape [batch, seq_len, output_dim].
         """
         batch_size = speaker_expr.size(0)
-        
+        print("inside model")
         # Encode speaker face features
         _, speaker_hidden = self.speaker_encoder(speaker_expr)  
         # Use final layer's hidden state: shape [batch, hidden_dim]
