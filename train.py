@@ -35,7 +35,7 @@ def train_model(model, train_loader, val_loader, optimizer, device, epochs, chec
         running_loss = 0.0
         num_batches = 0
         start_time = time.time()
-        print(start_time)
+        
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch}/{epochs}", unit="batch")
 
         for batch in progress_bar:
@@ -45,25 +45,24 @@ def train_model(model, train_loader, val_loader, optimizer, device, epochs, chec
             if batch is None:
                 continue
             speaker_expr, listener_expr, speaker_mfcc, _, _, _ = batch
-            print("1")
             B, N, T, F_expr = speaker_expr.shape
             speaker_expr = speaker_expr.view(-1, T, F_expr)
             listener_expr = listener_expr.view(-1, T, listener_expr.shape[-1])
             speaker_mfcc = speaker_mfcc.view(-1, T, speaker_mfcc.shape[-1])
-            print("2")
             # Prepare decoder inputs using teacher forcing: first time step is zeros.
             batch_size, seq_len, out_dim = listener_expr.shape
             decoder_inputs = torch.zeros(batch_size, seq_len, out_dim, device=device)
             decoder_inputs[:, 1:, :] = listener_expr[:, :-1, :]
-            print("Here")
+
             # Move data to device
             speaker_expr = speaker_expr.to(device).float()
             listener_expr = listener_expr.to(device).float()
             speaker_mfcc = speaker_mfcc.to(device).float()
 
             optimizer.zero_grad()
-            print("haofan")
+            
             outputs = model(speaker_expr, speaker_mfcc, decoder_inputs)
+            
             loss = criterion(outputs, listener_expr)
             loss.backward()
             optimizer.step()
