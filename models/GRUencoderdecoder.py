@@ -64,7 +64,7 @@ class GRUEncoderDecoder(nn.Module):
             Tensor: Generated listener face features, shape [batch, seq_len, output_dim].
         """
         batch_size = speaker_expr.size(0)
-        print("******inside model******")
+        
         # Encode speaker face features
         _, speaker_hidden = self.speaker_encoder(speaker_expr)  
         # Use final layer's hidden state: shape [batch, hidden_dim]

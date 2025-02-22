@@ -18,7 +18,7 @@ def get_model(model_name, **kwargs):
     if model_name == "gru_encoderdecoder":
         
         from models.GRUencoderdecoder import GRUEncoderDecoder
-        print(model_name)
+        
         return GRUEncoderDecoder()
     #elif model_name == "attention":
     #    from models.attention import AttentionModel  # Ensure AttentionModel exists in models/attention.py
