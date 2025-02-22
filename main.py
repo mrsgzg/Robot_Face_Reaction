@@ -19,13 +19,13 @@ def main():
     parser.add_argument("--num_select", type=int, default=1,
                         help="Number of select sequences.")
     # DataLoader parameters
-    parser.add_argument("--batch_size", type=int, default=2,
+    parser.add_argument("--batch_size", type=int, default=128,
                         help="Batch size for training.")
     parser.add_argument("--sequence_length", type=int, default=100,
                         help="Length of each sequence window.")
     parser.add_argument("--stride", type=int, default=10,
                         help="Stride for sequence creation.")
-    parser.add_argument("--num_workers", type=int, default=0,
+    parser.add_argument("--num_workers", type=int, default=4,
                         help="Number of workers for DataLoader.")
     
     # Training hyperparameters

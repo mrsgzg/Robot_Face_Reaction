@@ -2,7 +2,7 @@ import argparse
 import os
 import torch
 import torch.nn as nn
-from dataset import get_dataloader
+from data_process import get_dataloader
 
 def test_model(model, test_loader, device):
     """
