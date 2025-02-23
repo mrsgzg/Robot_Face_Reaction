@@ -46,6 +46,9 @@ class SpeakerListenerDataset(Dataset):
 
         return df.reset_index()
 
+
+
+    
     def _load_parquet(self, parquet_path):
         """读取 Parquet 并进行特征筛选 + 归一化 + 插值补帧"""
         if not os.path.exists(parquet_path) or os.stat(parquet_path).st_size == 0:
@@ -59,6 +62,8 @@ class SpeakerListenerDataset(Dataset):
             df = self._interpolate_missing_frames(df)  # **✅ 插值补帧**
             df = df.drop(columns=["frame"])  # 删除 frame 列多余列
             #print("✅ 加载成功:", parquet_path)
+
+
             # **使用全局 scaler 归一化**    
             df = self.scaler.transform(df.to_numpy())  # ✅ 使用全局 scaler 归一化
 
@@ -149,6 +154,7 @@ class SpeakerListenerDataset(Dataset):
         row = self.mapping_df.iloc[idx]
         speaker_parquet = self._convert_path(row.iloc[1], "parquet")
         listener_parquet = self._convert_path(row.iloc[2], "parquet")
+        print(row.iloc[2])
         speaker_audio = self._convert_audio_path(row.iloc[1], "wav")
         listener_audio = self._convert_audio_path(row.iloc[2], "wav")
 
