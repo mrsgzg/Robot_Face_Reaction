@@ -29,7 +29,7 @@ def get_model(model_name, **kwargs):
     else:
         raise ValueError(f"Unknown model type: {model_name}")
 
-#if __name__ == "__main__":
-#    # Quick test: instantiate a default GRUEncoderDecoder model.
-#    model = get_model("gru_encoderdecoder")
-#    print(model)
+if __name__ == "__main__":
+    # Quick test: instantiate a default GRUEncoderDecoder model.
+    model = get_model("gru_encoderdecoder")
+    print(model)

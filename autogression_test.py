@@ -175,7 +175,9 @@ def main():
                 input_t = pred_t  # feed prediction as next input
             outputs = torch.cat(predictions, dim=1)  # shape: [B, seq_len, out_dim]
             test_loss = nn.MSELoss()(outputs, listener_expr.to(device).float())
+            AU_loss = nn.MSELoss()(outputs[:,:,136:], listener_expr[:,:,136:].to(device).float())
             print("Test Loss (autoregressive, normalized):", test_loss.item())
+            print(f"AU_LOSS:{AU_loss}")
         else:
             # Use teacher forcing.
             batch_size, seq_len, out_dim = listener_expr.shape
@@ -196,7 +198,11 @@ def main():
     unscaled_speaker = inverse_transform_predictions(speaker_np, face_scaler)
 
     mse_unscaled = np.mean((unscaled_outputs - unscaled_listener) ** 2)
-    print("Test MSE on unscaled data:", mse_unscaled)
+    AU_unscaled_mse = np.mean((unscaled_outputs[:,:,136:] - unscaled_listener[:,:,136:]) ** 2)
+    FACE_MSE = np.mean((unscaled_outputs[:,:,:136] - unscaled_listener[:,:,:136]) ** 2)
+    print(f'AU_outputs_MSE:{AU_unscaled_mse}')
+    print(f"Test MSE on unscaled data:", mse_unscaled)
+    print(f"Face——MSE: {FACE_MSE}")
     
     # Save the first sample's predicted face sequence to a file.
     sample_face_sequence = unscaled_outputs[0]  # shape: [T, 161]
