@@ -25,48 +25,119 @@ def inverse_transform_predictions(predictions, scaler):
     unscaled_flat = scaler.inverse_transform(predictions_flat)
     return unscaled_flat.reshape(B, T, F)
 
-def visualize_face_sequence(ground_face,predict_face,Speaker_face, save_path):
+def visualize_face_sequence(ground_face, predict_face, Speaker_face, save_path):
     """
-    Visualize a sequence of face features as an animated plot.
+    Visualize a sequence of face features as an animated plot with eye gaze direction.
     
     Args:
-        face_sequence (ndarray): Array of shape [T, 161] where each row
-            contains 68 x-coordinates, 68 y-coordinates, then additional features.
+        ground_face (ndarray): Array of shape [T, 161] for ground truth.
+        predict_face (ndarray): Array of shape [T, 161] for generated reaction.
+        Speaker_face (ndarray): Array of shape [T, 161] for the speaker.
         save_path (str): Path to save the output animation (e.g. 'face_animation.gif').
     """
     T, D = ground_face.shape
+    if D < 136:
+        raise ValueError("Expected at least 136 dimensions for 68 (x,y) pairs.")
     
-    # Extract the first 136 features (68 x and 68 y)
-    #landmarks = ground_face[:, :136]  # shape: [T, 136]
+    # Set up the figure with three subplots
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5))
     
-    # Set up the plot.
-    fig, (ax1,ax2,ax3) = plt.subplots(1, 3,figsize=(10, 5))
-    ax1.set_xlim(0, 250)
-    ax1.set_ylim(250, 0)  # 反转 y 轴使得面部显示正常
+    # For simplicity, we use fixed axis limits here (adjust as needed)
+    for ax in (ax1, ax2, ax3):
+        ax.set_xlim(0, 250)
+        ax.set_ylim(250, 0)  # Reverse y-axis so the face appears correctly
+        ax.set_aspect('equal')
     
+    # Initialize the scatter plots for face landmarks
+    scat1, = ax1.plot([], [], 'ro', markersize=2)
+    scat2, = ax2.plot([], [], 'bo', markersize=2)
+    scat3, = ax3.plot([], [], 'ko', markersize=2)
     
-    ax2.set_xlim(0, 250)
-    ax2.set_ylim(250, 0)  # 反转 y 轴使得面部显示正常
+    # Initialize gaze line objects for each subplot
+    gaze_line_left_1, = ax1.plot([], [], 'g-', linewidth=2)
+    gaze_line_right_1, = ax1.plot([], [], 'g-', linewidth=2)
+    gaze_line_left_2, = ax2.plot([], [], 'g-', linewidth=2)
+    gaze_line_right_2, = ax2.plot([], [], 'g-', linewidth=2)
+    gaze_line_left_3, = ax3.plot([], [], 'g-', linewidth=2)
+    gaze_line_right_3, = ax3.plot([], [], 'g-', linewidth=2)
     
-    ax3.set_xlim(0, 250)
-    ax3.set_ylim(250, 0)  # 反转 y 轴使得面部显示正常
+    scale = 10  # scale factor for the length of the gaze lines
     
-
-    scat1, = ax1.plot([],[], 'ro', markersize=2)
-    scat2, = ax2.plot([],[], 'bo', markersize=2)
-    scat3, = ax3.plot([],[], 'go', markersize=2)
     def update(frame):
-         # shape: [68, 2]
-        scat1.set_data(Speaker_face[frame,0:68],Speaker_face[frame,68:136])
-        ax1.set_title(f"Frame {frame+1}/{T} Speaker Face: ")
-
-        scat2.set_data(ground_face[frame,0:68],ground_face[frame,68:136])
-        ax2.set_title(f" Grount Truth: ")
-        scat3.set_data(predict_face[frame,0:68],predict_face[frame,68:136])
-        ax3.set_title(f"Generated Reaction: ")
-        return scat1,scat2
+        # --- For Speaker Face (ax1) ---
+        x_sp = Speaker_face[frame, :68]
+        y_sp = Speaker_face[frame, 68:136]
+        scat1.set_data(x_sp, y_sp)
+        ax1.set_title(f"Frame {frame+1}/{T} Speaker Face")
+        
+        # --- For Ground Truth (ax2) ---
+        x_gt = ground_face[frame, :68]
+        y_gt = ground_face[frame, 68:136]
+        scat2.set_data(x_gt, y_gt)
+        ax2.set_title("Ground Truth")
+        
+        # --- For Generated Reaction (ax3) ---
+        x_pred = predict_face[frame, :68]
+        y_pred = predict_face[frame, 68:136]
+        scat3.set_data(x_pred, y_pred)
+        ax3.set_title("Generated Reaction")
+        
+        # --- Compute and Plot Gaze Lines ---
+        # For each face, we assume the last two features are gaze_x and gaze_y.
+        # Speaker Face:
+        gaze_x_sp = Speaker_face[frame, -2]
+        gaze_y_sp = Speaker_face[frame, -1]
+        left_eye_center_sp_x = (x_sp[36] + x_sp[39]) / 2.0
+        left_eye_center_sp_y = (y_sp[36] + y_sp[39]) / 2.0
+        right_eye_center_sp_x = (x_sp[42] + x_sp[45]) / 2.0
+        right_eye_center_sp_y = (y_sp[42] + y_sp[45]) / 2.0
+        left_gaze_end_sp_x = left_eye_center_sp_x + scale * gaze_x_sp
+        left_gaze_end_sp_y = left_eye_center_sp_y - scale * gaze_y_sp
+        right_gaze_end_sp_x = right_eye_center_sp_x + scale * gaze_x_sp
+        right_gaze_end_sp_y = right_eye_center_sp_y - scale * gaze_y_sp
+        gaze_line_left_1.set_data([left_eye_center_sp_x, left_gaze_end_sp_x],
+                                  [left_eye_center_sp_y, left_gaze_end_sp_y])
+        gaze_line_right_1.set_data([right_eye_center_sp_x, right_gaze_end_sp_x],
+                                   [right_eye_center_sp_y, right_gaze_end_sp_y])
+        
+        # Ground Truth:
+        gaze_x_gt = ground_face[frame, -2]
+        gaze_y_gt = ground_face[frame, -1]
+        left_eye_center_gt_x = (x_gt[36] + x_gt[39]) / 2.0
+        left_eye_center_gt_y = (y_gt[36] + y_gt[39]) / 2.0
+        right_eye_center_gt_x = (x_gt[42] + x_gt[45]) / 2.0
+        right_eye_center_gt_y = (y_gt[42] + y_gt[45]) / 2.0
+        left_gaze_end_gt_x = left_eye_center_gt_x + scale * gaze_x_gt
+        left_gaze_end_gt_y = left_eye_center_gt_y - scale * gaze_y_gt
+        right_gaze_end_gt_x = right_eye_center_gt_x + scale * gaze_x_gt
+        right_gaze_end_gt_y = right_eye_center_gt_y - scale * gaze_y_gt
+        gaze_line_left_2.set_data([left_eye_center_gt_x, left_gaze_end_gt_x],
+                                  [left_eye_center_gt_y, left_gaze_end_gt_y])
+        gaze_line_right_2.set_data([right_eye_center_gt_x, right_gaze_end_gt_x],
+                                   [right_eye_center_gt_y, right_gaze_end_gt_y])
+        
+        # Generated Reaction:
+        gaze_x_pred = predict_face[frame, -2]
+        gaze_y_pred = predict_face[frame, -1]
+        left_eye_center_pred_x = (x_pred[36] + x_pred[39]) / 2.0
+        left_eye_center_pred_y = (y_pred[36] + y_pred[39]) / 2.0
+        right_eye_center_pred_x = (x_pred[42] + x_pred[45]) / 2.0
+        right_eye_center_pred_y = (y_pred[42] + y_pred[45]) / 2.0
+        left_gaze_end_pred_x = left_eye_center_pred_x + scale * gaze_x_pred
+        left_gaze_end_pred_y = left_eye_center_pred_y - scale * gaze_y_pred
+        right_gaze_end_pred_x = right_eye_center_pred_x + scale * gaze_x_pred
+        right_gaze_end_pred_y = right_eye_center_pred_y - scale * gaze_y_pred
+        gaze_line_left_3.set_data([left_eye_center_pred_x, left_gaze_end_pred_x],
+                                  [left_eye_center_pred_y, left_gaze_end_pred_y])
+        gaze_line_right_3.set_data([right_eye_center_pred_x, right_gaze_end_pred_x],
+                                   [right_eye_center_pred_y, right_gaze_end_pred_y])
+        
+        return (scat1, scat2, scat3, 
+                gaze_line_left_1, gaze_line_right_1,
+                gaze_line_left_2, gaze_line_right_2,
+                gaze_line_left_3, gaze_line_right_3)
     
-    ani = animation.FuncAnimation(fig, update, frames=T, blit=True, interval=100)
+    ani = animation.FuncAnimation(fig, update, frames=T, interval=200, blit=True)
     ani.save(save_path, writer='pillow')
     plt.close(fig)
     print(f"Animation saved to {save_path}")
@@ -91,7 +162,7 @@ def main():
     
     # Model parameters
     parser.add_argument("--model", type=str, default="gru_encoderdecoder", help="Model type to use.")
-    parser.add_argument("--checkpoint", type=str, default='checkpoints/checkpoint_epoch_100.pt', help="Path to the model checkpoint file.")
+    parser.add_argument("--checkpoint", type=str, default='checkpoints_100/checkpoint_epoch_100.pt', help="Path to the model checkpoint file.")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device to run testing on.")
     
