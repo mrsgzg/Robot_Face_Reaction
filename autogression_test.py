@@ -5,11 +5,26 @@ import torch
 import numpy as np
 import joblib
 import matplotlib.pyplot as plt
-import torch.nn as nn
 import matplotlib.animation as animation
-
+import torch.nn as nn
 from data_process import get_dataloader
 from model import get_model
+from collections import OrderedDict
+
+def load_checkpoint(checkpoint_path, device):
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    state_dict = checkpoint['model_state_dict']
+    return state_dict, checkpoint.get('epoch', None)
+
+def inverse_transform_predictions(predictions, scaler):
+    """
+    Inverse-transform a numpy array of shape [B, T, F] using the provided scaler.
+    """
+    B, T, F = predictions.shape
+    predictions_flat = predictions.reshape(B * T, F)
+    unscaled_flat = scaler.inverse_transform(predictions_flat)
+    return unscaled_flat.reshape(B, T, F)
+
 def visualize_face_sequence(ground_face,predict_face,Speaker_face, save_path):
     """
     Visualize a sequence of face features as an animated plot.
@@ -56,23 +71,8 @@ def visualize_face_sequence(ground_face,predict_face,Speaker_face, save_path):
     plt.close(fig)
     print(f"Animation saved to {save_path}")
 
-def load_checkpoint(checkpoint_path, device):
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-    state_dict = checkpoint['model_state_dict']
-    # Optionally, if the keys start with "module.", we can leave it if we wrap the model.
-    return state_dict, checkpoint.get('epoch', None)
-
-def inverse_transform_predictions(predictions, scaler):
-    """
-    Inverse-transform a tensor of shape [B, T, F] using the provided scaler.
-    """
-    B, T, F = predictions.shape
-    predictions_flat = predictions.reshape(B * T, F)
-    unscaled_flat = scaler.inverse_transform(predictions_flat)
-    return unscaled_flat.reshape(B, T, F)
-
 def main():
-    parser = argparse.ArgumentParser(description="Test the trained model for listener face feature generation.")
+    parser = argparse.ArgumentParser(description="Test the trained model and visualize face sequence using autoregressive decoding.")
     
     # Dataset and scaler parameters
     parser.add_argument("--mapping_csv", type=str, default='Robot_dataset/test.csv',
@@ -84,23 +84,28 @@ def main():
     
     # DataLoader parameters
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size for testing.")
-    parser.add_argument("--sequence_length", type=int, default=50, help="Length of each sequence window.")
+    parser.add_argument("--sequence_length", type=int, default=100, help="Length of each sequence window.")
     parser.add_argument("--stride", type=int, default=10, help="Stride for sequence creation.")
-    parser.add_argument("--num_workers", type=int, default=4, help="Number of workers for DataLoader.")
+    parser.add_argument("--num_workers", type=int, default=0, help="Number of workers for DataLoader.")
     parser.add_argument("--num_select", type=int, default=1, help="Number of sequences to randomly select per video.")
     
     # Model parameters
     parser.add_argument("--model", type=str, default="gru_encoderdecoder", help="Model type to use.")
-    parser.add_argument("--checkpoint", type=str, default="checkpoints/checkpoint_epoch_100.pt", help="Path to the model checkpoint file.")
+    parser.add_argument("--checkpoint", type=str, default='checkpoints/checkpoint_epoch_50.pt', help="Path to the model checkpoint file.")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device to run testing on.")
-    parser.add_argument("--plot_file", type=str, default="genreated2.gif",
-                        help="File path to save the result plot.")
+    
+    # Autoregressive flag
+    parser.add_argument("--autoregressive", default=True, help="Use autoregressive decoding (model feeds its own previous output).")
+    
+    # Visualization output
+    parser.add_argument("--plot_file", type=str, default="face_animation.gif",
+                        help="File path to save the face animation (e.g., face_animation.gif).")
     
     args = parser.parse_args()
     device = args.device
     
-    # Create the test DataLoader
+    # Create test DataLoader.
     test_loader = get_dataloader(
         mapping_csv=args.mapping_csv,
         batch_size=args.batch_size,
@@ -112,64 +117,93 @@ def main():
         num_select=args.num_select
     )
     
-    # Initialize the model using our model factory.
-    # We assume fixed dimensions: speaker_input_dim=161, audio_input_dim=39, output_dim=161, hidden_dim=128, num_layers=1.
+    # Initialize model (using fixed dimensions as in training).
     model = get_model(args.model, speaker_input_dim=161, audio_input_dim=39, output_dim=161, hidden_dim=128, num_layers=1)
     model.to(device)
     
-    # Load the checkpoint. If the checkpoint was saved using DataParallel, we need to either strip the "module." prefix or wrap the model.
-    state_dict, epoch = load_checkpoint(args.checkpoint, device)
+    # Load checkpoint; if keys are prefixed with "module.", wrap model in DataParallel.
+    state_dict, _ = load_checkpoint(args.checkpoint, device)
     if list(state_dict.keys())[0].startswith("module."):
-        # If keys start with "module.", we wrap the model with DataParallel.
         model = torch.nn.DataParallel(model)
     model.load_state_dict(state_dict)
     model.eval()
     
-    # Load the face scaler for inverse transformation.
+    # Load face scaler.
     face_scaler = joblib.load(args.scaler_path)
     
     # Get a batch of test data.
     batch = next(iter(test_loader))
+    
     # Expected batch: speaker_expr, listener_expr, speaker_mfcc, listener_mfcc, speaker_mel, listener_mel
     speaker_expr, listener_expr, speaker_mfcc, _, _, _ = batch
-    print(speaker_expr.shape)
-    # The dataset returns tensors in shape [B, num_select, T, F]. Flatten them so each sequence is independent.
+    
+    # Flatten tensors if shape is [B, num_select, T, F].
     if speaker_expr.ndim == 4:
         B, N, T, F_expr = speaker_expr.shape
         speaker_expr = speaker_expr.view(-1, T, F_expr)
         listener_expr = listener_expr.view(-1, T, listener_expr.shape[-1])
         speaker_mfcc = speaker_mfcc.view(-1, T, speaker_mfcc.shape[-1])
     
-    # Prepare decoder inputs with teacher forcing: shift listener_expr by one time step.
-    batch_size, seq_len, out_dim = listener_expr.shape
-    decoder_inputs = torch.zeros(batch_size, seq_len, out_dim, device=device)
-    decoder_inputs[:, 1:, :] = listener_expr[:, :-1, :]
-    
-    # Move tensors to device.
-    speaker_expr = speaker_expr.to(device).float()
-    speaker_mfcc = speaker_mfcc.to(device).float()
-    decoder_inputs = decoder_inputs.to(device).float()
-    
     with torch.no_grad():
-        outputs = model(speaker_expr, speaker_mfcc, decoder_inputs)  # Shape: [B, T, 161]
-        test_loss = nn.MSELoss()(outputs, listener_expr.to(device).float())
-        print("Test Loss (normalized):", test_loss.item())
+        print(f"State of Auto:{args.autoregressive}")
+        if args.autoregressive:
+            # Use autoregressive decoding.
+            # First, obtain the encoder output from the model.
+            # If model is DataParallel, use model.module.
+            encoder = model.module if isinstance(model, torch.nn.DataParallel) else model
+            speaker_expr = speaker_expr.to(device).float()
+            speaker_mfcc = speaker_mfcc.to(device).float()
+            # Run speaker and audio encoders.
+            _, speaker_hidden = encoder.speaker_encoder(speaker_expr)
+            speaker_hidden = speaker_hidden[-1]
+            _, audio_hidden = encoder.audio_encoder(speaker_mfcc)
+            audio_hidden = audio_hidden[-1]
+            fused = torch.cat((speaker_hidden, audio_hidden), dim=-1)
+            decoder_init = torch.tanh(encoder.fusion_fc(fused))
+            decoder_init = decoder_init.unsqueeze(0).repeat(encoder.decoder.num_layers, 1, 1)
+            
+            # Autoregressive loop.
+            B_ar, seq_len, out_dim = listener_expr.shape
+            input_t = torch.zeros(B_ar, 1, out_dim, device=device)  # start token (can be zeros)
+            predictions = []
+            hidden_state = decoder_init
+            for t in range(seq_len):
+                # One step at a time: input_t shape [B, 1, out_dim].
+                out_step, hidden_state = encoder.decoder(input_t, hidden_state)
+                pred_t = encoder.out_fc(out_step)  # shape: [B, 1, out_dim]
+                predictions.append(pred_t)
+                input_t = pred_t  # feed prediction as next input
+            outputs = torch.cat(predictions, dim=1)  # shape: [B, seq_len, out_dim]
+            test_loss = nn.MSELoss()(outputs, listener_expr.to(device).float())
+            print("Test Loss (autoregressive, normalized):", test_loss.item())
+        else:
+            # Use teacher forcing.
+            batch_size, seq_len, out_dim = listener_expr.shape
+            decoder_inputs = torch.zeros(batch_size, seq_len, out_dim, device=device)
+            decoder_inputs[:, 1:, :] = listener_expr[:, :-1, :]
+            outputs = model(speaker_expr, speaker_mfcc, decoder_inputs)
+            test_loss = nn.MSELoss()(outputs, listener_expr.to(device).float())
+            print("Test Loss (teacher forcing, normalized):", test_loss.item())
     
-    # Move outputs and ground truth to CPU for inverse transformation.
+    # Convert outputs and ground truth to numpy arrays.
     outputs_np = outputs.cpu().numpy()
     listener_np = listener_expr.cpu().numpy()
     speaker_np = speaker_expr.cpu().numpy()
-    # Inverse-transform to get original-scale outputs.
+    # Inverse-transform predictions and ground truth.
     unscaled_outputs = inverse_transform_predictions(outputs_np, face_scaler)
     unscaled_listener = inverse_transform_predictions(listener_np, face_scaler)
     unscaled_speaker = inverse_transform_predictions(speaker_np, face_scaler)
-    
 
     mse_unscaled = np.mean((unscaled_outputs - unscaled_listener) ** 2)
     print("Test MSE on unscaled data:", mse_unscaled)
-    print(unscaled_outputs.shape)
     
+    # Save the first sample's predicted face sequence to a file.
+    sample_face_sequence = unscaled_outputs[0]  # shape: [T, 161]
+    np.save("sample_face_sequence.npy", sample_face_sequence)
+    print("Saved sample face sequence to sample_face_sequence.npy")
+    
+    # Visualize the face sequence as an animated GIF.
     visualize_face_sequence(unscaled_listener[0],unscaled_outputs[0],unscaled_speaker[0] ,args.plot_file)
-    #visualize_face_sequence(unscaled_listener[0],"ground.gif")
+    
 if __name__ == "__main__":
     main()

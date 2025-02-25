@@ -154,7 +154,7 @@ class SpeakerListenerDataset(Dataset):
         row = self.mapping_df.iloc[idx]
         speaker_parquet = self._convert_path(row.iloc[1], "parquet")
         listener_parquet = self._convert_path(row.iloc[2], "parquet")
-        print(row.iloc[2])
+        #print(row.iloc[2])
         speaker_audio = self._convert_audio_path(row.iloc[1], "wav")
         listener_audio = self._convert_audio_path(row.iloc[2], "wav")
 
@@ -189,7 +189,7 @@ def get_dataloader(mapping_csv, batch_size=2, stride=10, num_workers=0, sequence
     dataset = SpeakerListenerDataset(mapping_csv, stride, sequence_length, scaler_path=scaler_path, audio_scaler_path=audio_scaler_path,num_select=num_select)
     return DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
 
-'''
+
 if __name__ == '__main__':
     # ✅ 指定测试路径
     mapping_csv = "Robot_dataset/train.csv"
@@ -218,4 +218,3 @@ if __name__ == '__main__':
 
         # **只测试一个 batch**
         break
-'''
