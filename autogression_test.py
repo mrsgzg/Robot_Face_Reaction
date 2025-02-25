@@ -91,7 +91,7 @@ def main():
     
     # Model parameters
     parser.add_argument("--model", type=str, default="gru_encoderdecoder", help="Model type to use.")
-    parser.add_argument("--checkpoint", type=str, default='checkpoints/checkpoint_epoch_50.pt', help="Path to the model checkpoint file.")
+    parser.add_argument("--checkpoint", type=str, default='checkpoints/checkpoint_epoch_100.pt', help="Path to the model checkpoint file.")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device to run testing on.")
     
@@ -182,6 +182,7 @@ def main():
             decoder_inputs = torch.zeros(batch_size, seq_len, out_dim, device=device)
             decoder_inputs[:, 1:, :] = listener_expr[:, :-1, :]
             outputs = model(speaker_expr, speaker_mfcc, decoder_inputs)
+            print(f'out_put_shape:{outputs}')
             test_loss = nn.MSELoss()(outputs, listener_expr.to(device).float())
             print("Test Loss (teacher forcing, normalized):", test_loss.item())
     
