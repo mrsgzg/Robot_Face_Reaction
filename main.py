@@ -21,7 +21,7 @@ def main():
     # DataLoader parameters
     parser.add_argument("--batch_size", type=int, default=256,
                         help="Batch size for training.")
-    parser.add_argument("--sequence_length", type=int, default=25,
+    parser.add_argument("--sequence_length", type=int, default=100,
                         help="Length of each sequence window.")
     parser.add_argument("--stride", type=int, default=10,
                         help="Stride for sequence creation.")

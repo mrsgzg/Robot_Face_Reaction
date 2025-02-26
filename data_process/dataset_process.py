@@ -26,7 +26,7 @@ class SpeakerListenerDataset(Dataset):
     def _convert_path(self, path, ext):
         """自动适配 Windows 和 Ubuntu 路径，同时替换扩展名"""
         path = "Robot_dataset/Face/"+path+"."+ext
-        print(path)
+        #print(path)
         return path
     
     def _convert_audio_path(self, path,ext):
