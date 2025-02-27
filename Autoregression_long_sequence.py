@@ -158,10 +158,10 @@ def main():
     parser.add_argument("--num_workers", type=int, default=0, help="Number of workers for DataLoader.")
     parser.add_argument("--num_select", type=int, default=1, help="Number of sequences to select per video.")
     parser.add_argument("--model", type=str, default="gru_encoderdecoder", help="Model type to use.")
-    parser.add_argument("--checkpoint", type=str ,default="checkpoints/checkpoint_epoch_100.pt", help="Path to the model checkpoint file.")
+    parser.add_argument("--checkpoint", type=str ,default="checkpoints_seqlong_200/checkpoint_epoch_100.pt", help="Path to the model checkpoint file.")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device to use for testing.")
-    parser.add_argument("--plot_file", type=str, default="full_face_animation.gif",
+    parser.add_argument("--plot_file", type=str, default="full_face_animation_final_200_long.gif",
                         help="Path to save the generated face animation GIF.")
     args = parser.parse_args()
     device = args.device

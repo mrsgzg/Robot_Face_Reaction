@@ -31,6 +31,7 @@ class SpeakerListenerDataset(Dataset):
     
     def _convert_audio_path(self, path,ext):
         path = "Robot_dataset/Audio_files/"+path+"."+ext
+        print(path)
         return path
     def _interpolate_missing_frames(self, df):
         """填充缺失帧，确保 750 帧"""
@@ -193,7 +194,7 @@ def get_dataloader(mapping_csv, batch_size=2, stride=10, num_workers=0, sequence
 
 if __name__ == '__main__':
     # ✅ 指定测试路径
-    mapping_csv = "Robot_dataset/train.csv"
+    mapping_csv = "Robot_dataset/visual_testmap.csv"
     face_scaler_path = "Robot_Face_Reaction/data_process/Face_Scaler.pkl"
     audio_scaler_path = "Robot_Face_Reaction/data_process/Audio_Scaler.pkl"
     
